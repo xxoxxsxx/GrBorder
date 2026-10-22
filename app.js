@@ -52,57 +52,66 @@ function prepareCameraOverlay() {
   overlay.globalCompositeOperation = 'destination-out';
   roundedScreenPath(overlay); overlay.fill(); overlay.restore();
 }
-function render(target, W, H) {
+const presets = {'3:4':[1080,1440], '9:16':[1080,1920], '1:1':[1080,1080], '4:3':[1440,1080], '16:9':[1920,1080]};
+const settingIds = ['ratio','quality','layout','format','blur','camera-size'];
+function dimensions() {
+  const factor = $('quality').value === 'high' ? 2 : 1;
+  return presets[$('ratio').value].map(n => n*factor);
+}
+function panels(W,H) {
+  const horizontal = $('layout').value === 'horizontal' || ($('layout').value === 'auto' && W>H);
+  return horizontal ? {cw:Math.floor(W/2),ch:H,x:Math.floor(W/2),y:0,w:W-Math.floor(W/2),h:H} : {cw:W,ch:Math.floor(H/2),x:0,y:Math.floor(H/2),w:W,h:H-Math.floor(H/2)};
+}
+function saveSettings() {
+  try { localStorage.setItem('frame-lab-settings-v1',JSON.stringify(Object.fromEntries(settingIds.map(id=>[id,$(id).value])))); } catch {}
+}
+function restoreSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('frame-lab-settings-v1'));
+    if (!saved || typeof saved !== 'object') return;
+    for (const id of settingIds) {
+      const el=$(id), value=saved[id];
+      if (typeof value !== 'string') continue;
+      if (el.tagName === 'SELECT') { if ([...el.options].some(o=>o.value===value)) el.value=value; }
+      else if (Number.isFinite(Number(value)) && Number(value)>=Number(el.min) && Number(value)<=Number(el.max)) el.value=value;
+    }
+  } catch {}
+}
+function render(target,W,H) {
   if (!photo || !template) return;
-  target.imageSmoothingEnabled = true; target.imageSmoothingQuality = 'high';
-  const topHeight = Math.round(H/2), bottomHeight = H-topHeight;
-  const screenCrop = cropFor(photo, 1080, 720);
-  frameCtx.clearRect(0,0,1080,720);
-  frameCtx.drawImage(photo,screenCrop.x,screenCrop.y,screenCrop.width,screenCrop.height,0,0,1080,720);
-  // Blurred backdrop, computed at fixed resolution so every export matches.
-  if (background.width !== W || background.height !== topHeight) { background.width = W; background.height = topHeight; }
-  const bgCrop = cropFor(photo, W, topHeight);
-  backgroundCtx.save();
-  backgroundCtx.filter = `blur(${28*W/1080}px)`;
-  backgroundCtx.drawImage(photo,bgCrop.x,bgCrop.y,bgCrop.width,bgCrop.height,-W*.09,-topHeight*.09,W*1.18,topHeight*1.18);
-  backgroundCtx.restore();
-  target.drawImage(background,0,0);
-  target.fillStyle = 'rgba(0,0,0,.12)'; target.fillRect(0,0,W,topHeight);
-  // Fixed width unless the panel is too short to keep the whole camera body.
-  const s = Math.min(W/1080, topHeight/CAMERA_BAND);
-  const srcHeight = Math.min(720, topHeight/s);
-  const srcY = Math.max(0, Math.min(720-srcHeight, 362-srcHeight/2));
-  const ox = (W-1080*s)/2, oy = (topHeight-srcHeight*s)/2;
-  target.save();
-  target.shadowColor = 'rgba(0,0,0,.38)'; target.shadowBlur = 22*s; target.shadowOffsetY = 14*s;
-  target.setTransform(s,0,0,s, ox, oy-srcY*s);
-  target.fillStyle = '#171916'; cameraPath(target); target.fill();
-  target.restore();
-  const {left,top,right,bottom} = screen;
-  target.save();
-  target.setTransform(s,0,0,s, ox, oy-srcY*s);
-  target.save(); roundedScreenPath(target); target.clip();
-  target.drawImage(frame,left,top,right-left,bottom-top);
-  // A narrow inset shadow seats the picture behind the physical screen rim.
-  const topShade = target.createLinearGradient(0,top,0,top+4);
-  topShade.addColorStop(0,'rgba(0,0,0,.30)'); topShade.addColorStop(1,'rgba(0,0,0,0)');
-  target.fillStyle = topShade; target.fillRect(left,top,right-left,4);
-  const bottomShade = target.createLinearGradient(0,bottom-3,0,bottom);
-  bottomShade.addColorStop(0,'rgba(0,0,0,0)'); bottomShade.addColorStop(1,'rgba(0,0,0,.22)');
-  target.fillStyle = bottomShade; target.fillRect(left,bottom-3,right-left,3);
-  target.restore(); target.restore();
-  target.drawImage(cameraOverlay,0,srcY*2,2160,srcHeight*2,ox,oy,1080*s,srcHeight*s);
-  // Lower panel: the same photo, cover-cropped to this panel's aspect.
-  const crop = cropFor(photo, W, bottomHeight);
-  target.drawImage(photo,crop.x,crop.y,crop.width,crop.height,0,topHeight,W,bottomHeight);
+  const p=panels(W,H), crop=cropFor(photo,p.w,p.h);
+  target.clearRect(0,0,W,H); target.imageSmoothingQuality='high';
+  // Render the full chosen composition inside the LCD without stretching it.
+  frameCtx.fillStyle='#0a0c0e'; frameCtx.fillRect(0,0,1080,720);
+  const fit=Math.min(1080/p.w,720/p.h), fw=p.w*fit, fh=p.h*fit;
+  frameCtx.drawImage(photo,crop.x,crop.y,crop.width,crop.height,(1080-fw)/2,(720-fh)/2,fw,fh);
+  // A fixed-size background keeps blur identical between preview and export.
+  background.width=720; background.height=Math.round(720*p.ch/p.cw);
+  const bg=cropFor(photo,p.cw,p.ch), bw=background.width,bh=background.height;
+  backgroundCtx.filter=`blur(${Number($('blur').value)*bw/1080}px)`;
+  backgroundCtx.drawImage(photo,bg.x,bg.y,bg.width,bg.height,-bw*.25,-bh*.25,bw*1.5,bh*1.5);
+  target.drawImage(background,0,0,p.cw,p.ch);
+  target.fillStyle='rgba(0,0,0,.12)'; target.fillRect(0,0,p.cw,p.ch);
+  const base=Math.min(p.cw/1080,p.ch/600);
+  const scale=Math.min(base*Number($('camera-size').value)/100,p.cw*.88/570,p.ch*.84/330);
+  target.save(); target.beginPath();target.rect(0,0,p.cw,p.ch);target.clip();
+  target.translate(p.cw/2-540*scale,p.ch/2-364*scale);target.scale(scale,scale);
+  target.save();target.shadowColor='rgba(0,0,0,.38)';target.shadowBlur=22*scale;target.shadowOffsetY=14*scale;
+  target.fillStyle='#171916';cameraPath(target);target.fill();target.restore();
+  target.save();roundedScreenPath(target);target.clip();
+  target.drawImage(frame,screen.left,screen.top,screen.right-screen.left,screen.bottom-screen.top);
+  const shade=target.createLinearGradient(0,screen.top,0,screen.top+4);shade.addColorStop(0,'#0006');shade.addColorStop(1,'#0000');
+  target.fillStyle=shade;target.fillRect(screen.left,screen.top,384,4);target.restore();
+  target.drawImage(cameraOverlay,0,0,1080,720);target.restore();
+  target.drawImage(photo,crop.x,crop.y,crop.width,crop.height,p.x,p.y,p.w,p.h);
 }
 function setPreviewSize() {
-  const [w,h] = $('size').value.split('x').map(Number);
-  const k = Math.min(1, 1440/Math.max(w,h));
-  canvas.width = Math.round(w*k); canvas.height = Math.round(h*k);
-  const gcd = (a,b) => b ? gcd(b,a%b) : a;
-  const divisor = gcd(w,h);
-  $('ratio-label').textContent = `成品比例 / ${w/divisor}:${h/divisor}`;
+  const [w,h]=dimensions(), k=Math.min(1,1440/Math.max(w,h));
+  canvas.width=Math.round(w*k);canvas.height=Math.round(h*k);
+  $('ratio-label').textContent=`成品比例 / ${$('ratio').value}`;
+  $('dimensions').textContent=`导出 ${w} × ${h} 像素`;
+  $('blur-value').textContent=$('blur').value==='0'?'无虚化':$('blur').value;
+  $('camera-value').textContent=$('camera-size').value+'%';
 }
 function sync() {
   $('zoom').value = zoom; $('zoom-value').textContent = `${Math.round(zoom*100)}%`;
@@ -132,7 +141,7 @@ $('zoom').addEventListener('input',e => {zoom = Number(e.target.value);sync();})
 $('horizontal').addEventListener('input',e => {focusX = Number(e.target.value)/100;sync();});
 $('vertical').addEventListener('input',e => {focusY = Number(e.target.value)/100;sync();});
 $('reset').addEventListener('click',reset);
-$('size').addEventListener('change',() => {setPreviewSize();sync();});
+settingIds.forEach(id => $(id).addEventListener('input',()=>{setPreviewSize();sync();saveSettings();}));
 $('sample').addEventListener('click', async () => {
   const version = ++loadVersion;
   const image = await loadImage(window.TEMPLATE_ASSETS.sample);
@@ -142,14 +151,16 @@ $('sample').addEventListener('click', async () => {
 canvas.addEventListener('pointerdown',e => {
   if (!photo) return;
   const bounds = canvas.getBoundingClientRect();
-  if ((e.clientY-bounds.top)/bounds.height < .5) return;
-  const crop = cropFor(photo, canvas.width, canvas.height-Math.round(canvas.height/2));
-  drag = {x:e.clientX,y:e.clientY,px:focusX,py:focusY,crop,displayScale:bounds.width/canvas.width};
+  const p=panels(canvas.width,canvas.height);
+  const x=(e.clientX-bounds.left)*canvas.width/bounds.width, y=(e.clientY-bounds.top)*canvas.height/bounds.height;
+  if(x<p.x || y<p.y) return;
+  const crop = cropFor(photo,p.w,p.h);
+  drag = {x:e.clientX,y:e.clientY,px:focusX,py:focusY,crop,displayScale:bounds.width/canvas.width,panelWidth:p.w};
   canvas.setPointerCapture(e.pointerId);
 });
 canvas.addEventListener('pointermove',e => {
   if (!drag) return;
-  const imagePerClient = drag.crop.width/(drag.displayScale*canvas.width);
+  const imagePerClient = drag.crop.width/(drag.displayScale*drag.panelWidth);
   const freeX = photo.naturalWidth-drag.crop.width, freeY = photo.naturalHeight-drag.crop.height;
   const clamp = x => Math.min(1,Math.max(0,x));
   if (freeX > .001) focusX = clamp(drag.px-(e.clientX-drag.x)*imagePerClient/freeX);
@@ -157,26 +168,46 @@ canvas.addEventListener('pointermove',e => {
   sync();
 });
 ['pointerup','pointercancel','lostpointercapture'].forEach(type => canvas.addEventListener(type,() => {drag = null;}));
-$('download').addEventListener('click',() => {
-  if (!photo || !template) return;
-  const [w,h] = $('size').value.split('x').map(Number);
-  const output = document.createElement('canvas'); output.width = w; output.height = h;
-  const type = $('format').value;
-  $('download').disabled = true;
+let resultURL, resultFile;
+async function exportBlob() {
+  if(!photo || !template) throw Error('照片尚未加载完成');
+  const [w,h]=dimensions(), output=document.createElement('canvas');output.width=w;output.height=h;
+  render(output.getContext('2d'),w,h);
+  const type=$('format').value;
+  const blob=await new Promise(resolve=>output.toBlob(resolve,type,.95));
+  if(!blob) throw Error('图片生成失败，请重试');
+  return new File([blob],`frame-lab-${w}x${h}.${type==='image/png'?'png':'jpg'}`,{type});
+}
+async function performExport(preview) {
+  $('download').disabled=$('open-result').disabled=true;
   try {
-    render(output.getContext('2d'),w,h);
-    output.toBlob(blob => {
-      $('download').disabled = false;
-      if (!blob) {notify('导出失败，请重试。');return;}
-      const url = URL.createObjectURL(blob), a = document.createElement('a');
-      a.href = url; a.download = `frame-lab-${w}x${h}-${Date.now()}.${type === 'image/png' ? 'png' : 'jpg'}`;
-      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url),60000);
-      notify(`已生成 ${w} × ${h} 拼图，下载已开始。`);
-    },type,.95);
-  } catch (error) { $('download').disabled = false; notify(`导出失败：${error.message}`); }
+    const file=await exportBlob();
+    if(preview) {
+      if(resultURL) URL.revokeObjectURL(resultURL);
+      resultFile=file;resultURL=URL.createObjectURL(file);
+      $('result-image').src=$('result-link').href=resultURL;
+      $('share-result').hidden=!(navigator.canShare && navigator.canShare({files:[file]}));
+      $('result-dialog').showModal();
+    } else {
+      const url=URL.createObjectURL(file), link=document.createElement('a');link.href=url;link.download=file.name;
+      document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+      notify('图片已生成，下载已开始。');
+    }
+  } catch(error) {notify(error.message);}
+  finally {$('download').disabled=$('open-result').disabled=false;}
+}
+$('download').addEventListener('click',()=>performExport(false));
+$('open-result').addEventListener('click',()=>performExport(true));
+$('close-result').addEventListener('click',()=>$('result-dialog').close());
+// A separate tap preserves user activation for file sharing on mobile browsers.
+$('share-result').addEventListener('click',async()=>{
+  try {await navigator.share({files:[resultFile],title:'Frame Lab 相机拼图'});}
+  catch(error) {if(error.name!=='AbortError') notify('分享未成功，可以长按成品图片保存，或打开原尺寸图片。');}
 });
-(async () => {
-  $('download').disabled = true;
-  try { [template,photo] = await Promise.all([loadImage(window.TEMPLATE_ASSETS.template),loadImage(window.TEMPLATE_ASSETS.sample)]);prepareCameraOverlay();setPreviewSize();sync();$('download').disabled = false; }
-  catch(error) {notify(error.message);}
+(async()=>{
+  restoreSettings();setPreviewSize();
+  try {
+    [template,photo]=await Promise.all([loadImage(window.TEMPLATE_ASSETS.template),loadImage(window.TEMPLATE_ASSETS.sample)]);
+    prepareCameraOverlay();sync();$('download').disabled=$('open-result').disabled=false;
+  } catch(error) {notify(error.message);}
 })();
