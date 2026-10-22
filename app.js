@@ -77,6 +77,42 @@ function restoreSettings() {
     }
   } catch {}
 }
+// Three separable box passes approximate a Gaussian without Canvas.filter.
+// Clamp edge samples and average premultiplied colors to avoid dark alpha halos.
+function blurPixels(image, radius) {
+  if (radius < 1) return image;
+  const {width:w,height:h,data} = image, n=data.length;
+  let src=new Float32Array(n), dst=new Float32Array(n);
+  for(let i=0;i<n;i+=4) {
+    const a=data[i+3]/255;
+    src[i]=data[i]*a;src[i+1]=data[i+1]*a;src[i+2]=data[i+2]*a;src[i+3]=data[i+3];
+  }
+  const diameter=radius*2+1;
+  for(let pass=0;pass<3;pass++) {
+    for(const horizontal of [true,false]) {
+      const length=horizontal?w:h, lines=horizontal?h:w, step=horizontal?4:w*4;
+      for(let line=0;line<lines;line++) {
+        const base=horizontal?line*w*4:line*4;
+        for(let c=0;c<4;c++) {
+          let sum=0;
+          for(let k=-radius;k<=radius;k++) sum+=src[base+Math.min(length-1,Math.max(0,k))*step+c];
+          for(let pos=0;pos<length;pos++) {
+            dst[base+pos*step+c]=sum/diameter;
+            sum+=src[base+Math.min(length-1,pos+radius+1)*step+c]-src[base+Math.max(0,pos-radius)*step+c];
+          }
+        }
+      }
+      [src,dst]=[dst,src];
+    }
+  }
+  for(let i=0;i<n;i+=4) {
+    const alpha=src[i+3];
+    for(let c=0;c<3;c++) data[i+c]=alpha>0?src[i+c]*255/alpha:0;
+    data[i+3]=alpha;
+  }
+  return image;
+}
+let cachedBackgroundPhoto, cachedBackgroundKey;
 function render(target,W,H) {
   if (!photo || !template) return;
   const p=panels(W,H), crop=cropFor(photo,p.w,p.h);
@@ -86,10 +122,21 @@ function render(target,W,H) {
   const fit=Math.min(1080/p.w,720/p.h), fw=p.w*fit, fh=p.h*fit;
   frameCtx.drawImage(photo,crop.x,crop.y,crop.width,crop.height,(1080-fw)/2,(720-fh)/2,fw,fh);
   // A fixed-size background keeps blur identical between preview and export.
-  background.width=720; background.height=Math.round(720*p.ch/p.cw);
-  const bg=cropFor(photo,p.cw,p.ch), bw=background.width,bh=background.height;
-  backgroundCtx.filter=`blur(${Number($('blur').value)*bw/1080}px)`;
-  backgroundCtx.drawImage(photo,bg.x,bg.y,bg.width,bg.height,-bw*.25,-bh*.25,bw*1.5,bh*1.5);
+  const blur=Number($('blur').value);
+  const key=[(p.cw/p.ch).toFixed(6),zoom,focusX,focusY,blur].join(':');
+  if(cachedBackgroundPhoto!==photo || cachedBackgroundKey!==key) {
+    // Bound work on tall mobile layouts; exports reuse the same blurred pixels.
+    const factor=Math.min(720/p.cw,960/p.ch);
+    background.width=Math.max(1,Math.round(p.cw*factor));
+    background.height=Math.max(1,Math.round(p.ch*factor));
+    const bg=cropFor(photo,p.cw,p.ch),bw=background.width,bh=background.height;
+    backgroundCtx.drawImage(photo,bg.x,bg.y,bg.width,bg.height,-bw*.25,-bh*.25,bw*1.5,bh*1.5);
+    if(blur>0) {
+      const image=backgroundCtx.getImageData(0,0,bw,bh);
+      backgroundCtx.putImageData(blurPixels(image,Math.max(1,Math.round(blur*bw/1080))),0,0);
+    }
+    cachedBackgroundPhoto=photo;cachedBackgroundKey=key;
+  }
   target.drawImage(background,0,0,p.cw,p.ch);
   target.fillStyle='rgba(0,0,0,.12)'; target.fillRect(0,0,p.cw,p.ch);
   const base=Math.min(p.cw/1080,p.ch/600);
