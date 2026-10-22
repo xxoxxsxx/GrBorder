@@ -53,7 +53,7 @@ function prepareCameraOverlay() {
   roundedScreenPath(overlay); overlay.fill(); overlay.restore();
 }
 const presets = {'3:4':[1080,1440], '9:16':[1080,1920], '1:1':[1080,1080], '4:3':[1440,1080], '16:9':[1920,1080]};
-const settingIds = ['ratio','quality','layout','format','blur','camera-size'];
+const settingIds = ['ratio','quality','layout','format','blur','camera-size','watermark-on','watermark-text','watermark-size','watermark-opacity','watermark-position'];
 function dimensions() {
   const factor = $('quality').value === 'high' ? 2 : 1;
   return presets[$('ratio').value].map(n => n*factor);
@@ -63,7 +63,7 @@ function panels(W,H) {
   return horizontal ? {cw:Math.floor(W/2),ch:H,x:Math.floor(W/2),y:0,w:W-Math.floor(W/2),h:H} : {cw:W,ch:Math.floor(H/2),x:0,y:Math.floor(H/2),w:W,h:H-Math.floor(H/2)};
 }
 function saveSettings() {
-  try { localStorage.setItem('frame-lab-settings-v1',JSON.stringify(Object.fromEntries(settingIds.map(id=>[id,$(id).value])))); } catch {}
+  try { localStorage.setItem('frame-lab-settings-v1',JSON.stringify(Object.fromEntries(settingIds.map(id=>[id,$(id).type==='checkbox'?String($(id).checked):$(id).value])))); } catch {}
 }
 function restoreSettings() {
   try {
@@ -73,6 +73,8 @@ function restoreSettings() {
       const el=$(id), value=saved[id];
       if (typeof value !== 'string') continue;
       if (el.tagName === 'SELECT') { if ([...el.options].some(o=>o.value===value)) el.value=value; }
+      else if (el.type === 'checkbox') { if(value==='true'||value==='false') el.checked=value==='true'; }
+      else if (el.type === 'text' || el.tagName === 'TEXTAREA') { el.value=value; }
       else if (Number.isFinite(Number(value)) && Number(value)>=Number(el.min) && Number(value)<=Number(el.max)) el.value=value;
     }
   } catch {}
@@ -151,6 +153,34 @@ function render(target,W,H) {
   target.fillStyle=shade;target.fillRect(screen.left,screen.top,384,4);target.restore();
   target.drawImage(cameraOverlay,0,0,1080,720);target.restore();
   target.drawImage(photo,crop.x,crop.y,crop.width,crop.height,p.x,p.y,p.w,p.h);
+  drawWatermark(target,W,H);
+}
+// Single text watermark, optional, defaulting to the lower-right corner.
+const WATERMARK_INSET = .028, WATERMARK_GAP = .006;
+function watermarkLayout(W,H) {
+  const text=$('watermark-text').value.trim();
+  if(!$('watermark-on').checked || !text) return null;
+  const size=Math.round(W*Number($('watermark-size').value)/1000);
+  return {text,size,alpha:Number($('watermark-opacity').value)/100,position:$('watermark-position').value};
+}
+function drawWatermark(target,W,H) {
+  const mark=watermarkLayout(W,H);
+  if(!mark) return;
+  const inset=Math.round(Math.min(W,H)*WATERMARK_INSET), line=mark.size*1.12;
+  target.save();
+  target.font=`500 ${mark.size}px Inter,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif`;
+  const width=Math.min(target.measureText(mark.text).width, W-2*inset);
+  let x=inset, y=0;
+  if(mark.position.includes('right')) x=W-inset-width;
+  else if(!mark.position.includes('left')) x=(W-width)/2;
+  if(mark.position.startsWith('top')) y=inset+mark.size;
+  else if(mark.position.startsWith('bottom')) y=H-inset;
+  else y=(H-line)/2+mark.size*.78;
+  target.globalAlpha=mark.alpha;
+  target.shadowColor='rgba(0,0,0,.55)'; target.shadowBlur=mark.size*.28; target.shadowOffsetY=mark.size*.07;
+  target.fillStyle='#f6f4ec';
+  target.fillText(mark.text,x,y,Math.min(W-2*inset,W));
+  target.restore();
 }
 function setPreviewSize() {
   const [w,h]=dimensions(), k=Math.min(1,1440/Math.max(w,h));
@@ -159,6 +189,9 @@ function setPreviewSize() {
   $('dimensions').textContent=`导出 ${w} × ${h} 像素`;
   $('blur-value').textContent=$('blur').value==='0'?'无虚化':$('blur').value;
   $('camera-value').textContent=$('camera-size').value+'%';
+  $('watermark-size-value').textContent=Math.round(Number($('watermark-size').value)/10*100)/100+'%';
+  $('watermark-opacity-value').textContent=$('watermark-opacity').value+'%';
+  toggleWatermarkDefaults();
 }
 function sync() {
   $('zoom').value = zoom; $('zoom-value').textContent = `${Math.round(zoom*100)}%`;
@@ -189,6 +222,8 @@ $('horizontal').addEventListener('input',e => {focusX = Number(e.target.value)/1
 $('vertical').addEventListener('input',e => {focusY = Number(e.target.value)/100;sync();});
 $('reset').addEventListener('click',reset);
 settingIds.forEach(id => $(id).addEventListener('input',()=>{setPreviewSize();sync();saveSettings();}));
+$('watermark-text').addEventListener('input',e=>{toggleWatermarkDefaults();setPreviewSize();sync();saveSettings();});
+function toggleWatermarkDefaults() {$('watermark-defaults').hidden=!$('watermark-on').checked;}
 $('sample').addEventListener('click', async () => {
   const version = ++loadVersion;
   const image = await loadImage(window.TEMPLATE_ASSETS.sample);
@@ -252,7 +287,7 @@ $('share-result').addEventListener('click',async()=>{
   catch(error) {if(error.name!=='AbortError') notify('分享未成功，可以长按成品图片保存，或打开原尺寸图片。');}
 });
 (async()=>{
-  restoreSettings();setPreviewSize();
+  restoreSettings();toggleWatermarkDefaults();setPreviewSize();
   try {
     [template,photo]=await Promise.all([loadImage(window.TEMPLATE_ASSETS.template),loadImage(window.TEMPLATE_ASSETS.sample)]);
     prepareCameraOverlay();sync();$('download').disabled=$('open-result').disabled=false;
