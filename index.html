@@ -25,20 +25,21 @@
 <p class="hint">拖动预览中的大图调整构图。屏幕完整显示同一画面，比例不同时以黑边适配。</p>
 <label class="slider-label" for="zoom">照片缩放 <output id="zoom-value">100%</output></label><input id="zoom" type="range" min="1" max="3" step="0.01" value="1">
 <div class="positions"><label>水平位置<input id="horizontal" type="range" min="0" max="100" value="50"></label><label>垂直位置<input id="vertical" type="range" min="0" max="100" value="50"></label></div>
-<div class="section-title export-title"><span>04</span><h2>保存你的作品</h2></div>
+<div class="section-title export-title"><span>03</span><h2>设置成品</h2></div>
 <div class="export-options"><label>成品比例<select id="ratio"><option value="3:4">竖版 3:4</option><option value="9:16">全屏 9:16</option><option value="1:1">方形 1:1</option><option value="4:3">横版 4:3</option><option value="16:9">宽屏 16:9</option></select></label><label>清晰度<select id="quality"><option value="standard">标准</option><option value="high">高清</option></select></label></div>
 <div class="export-options"><label>布局<select id="layout"><option value="auto">自动（横版左右，竖版上下）</option><option value="vertical">上下拼图</option><option value="horizontal">左右拼图</option></select></label><label>格式<select id="format"><option value="image/png">PNG</option><option value="image/jpeg">JPG</option></select></label></div>
 <p id="dimensions" class="hint"></p>
 <label class="slider-label" for="blur">背景虚化 <output id="blur-value"></output></label><input id="blur" type="range" min="0" max="60" value="28">
 <label class="slider-label" for="camera-size">相机大小 <output id="camera-value"></output></label><input id="camera-size" type="range" min="60" max="140" value="100">
 <p class="hint">自动记住以上设置，照片与照片构图不会保存。</p>
-<div class="section-title"><span>03</span><h2>水印（可选）</h2></div>
-<label class="switch"><input id="watermark-on" type="checkbox"><span>添加水印</span></label>
+<div class="section-title"><span>04</span><h2>自定义文字（可选）</h2></div>
+<label class="switch"><input id="watermark-on" type="checkbox"><span>添加文字</span></label>
 <div id="watermark-defaults" hidden>
-<label class="slider-label" for="watermark-text">水印文字</label><input id="watermark-text" class="text-input" type="text" maxlength="40" placeholder="例如：@你的名字">
-<div class="export-options"><label>位置<select id="watermark-position"><option value="bottom-right" selected>右下角（默认）</option><option value="bottom-left">左下角</option><option value="top-right">右上角</option><option value="top-left">左上角</option><option value="bottom-center">底部居中</option><option value="top-center">顶部居中</option><option value="center-left">左侧居中</option><option value="center-right">右侧居中</option><option value="center">画面中央</option></select></label></div>
-<label class="slider-label" for="watermark-size">水印大小 <output id="watermark-size-value"></output></label><input id="watermark-size" type="range" min="6" max="30" value="12">
-<label class="slider-label" for="watermark-opacity">不透明度 <output id="watermark-opacity-value"></output></label><input id="watermark-opacity" type="range" min="20" max="100" value="70">
+<label class="slider-label" for="watermark-text">文字内容</label><input id="watermark-text" class="text-input" type="text" maxlength="40" placeholder="例如：RICOH、@你的名字" value="RICOH">
+<div class="export-options"><label>位置<select id="watermark-position"><option value="seam" selected>交界线正中（默认）</option><option value="bottom-right">右下角</option><option value="bottom-left">左下角</option><option value="top-right">右上角</option><option value="top-left">左上角</option><option value="bottom-center">底部居中</option><option value="top-center">顶部居中</option><option value="center-left">左侧居中</option><option value="center-right">右侧居中</option><option value="center">画面中央</option></select></label></div>
+<label class="slider-label" for="text-color">文字颜色<input id="text-color" type="color" value="#ffffff" aria-label="文字颜色"></label>
+<label class="slider-label" for="watermark-size">文字大小 <output id="watermark-size-value"></output></label><input id="watermark-size" type="range" min="6" max="180" value="45">
+<label class="slider-label" for="watermark-opacity">不透明度 <output id="watermark-opacity-value"></output></label><input id="watermark-opacity" type="range" min="10" max="100" value="100">
 </div>
 <button id="download" class="download" disabled>下载拼图 ↗</button>
 <button id="open-result" class="download" disabled>分享 / 保存到相册</button>

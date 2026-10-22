@@ -53,7 +53,7 @@ function prepareCameraOverlay() {
   roundedScreenPath(overlay); overlay.fill(); overlay.restore();
 }
 const presets = {'3:4':[1080,1440], '9:16':[1080,1920], '1:1':[1080,1080], '4:3':[1440,1080], '16:9':[1920,1080]};
-const settingIds = ['ratio','quality','layout','format','blur','camera-size','watermark-on','watermark-text','watermark-size','watermark-opacity','watermark-position'];
+const settingIds = ['ratio','quality','layout','format','blur','camera-size','watermark-on','watermark-text','watermark-size','watermark-opacity','watermark-position','text-color'];
 function dimensions() {
   const factor = $('quality').value === 'high' ? 2 : 1;
   return presets[$('ratio').value].map(n => n*factor);
@@ -68,11 +68,18 @@ function saveSettings() {
 function restoreSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem('frame-lab-settings-v1'));
+    // Migrate the original watermark defaults while preserving custom text.
+    if(saved && !('text-color' in saved)) {
+      saved['watermark-position']='seam';saved['watermark-size']='45';
+      saved['watermark-opacity']='100';
+      if(!saved['watermark-text']) saved['watermark-text']='RICOH';
+    }
     if (!saved || typeof saved !== 'object') return;
     for (const id of settingIds) {
       const el=$(id), value=saved[id];
       if (typeof value !== 'string') continue;
       if (el.tagName === 'SELECT') { if ([...el.options].some(o=>o.value===value)) el.value=value; }
+      else if (el.type === 'color') { if(/^#[0-9a-f]{6}$/i.test(value)) el.value=value; }
       else if (el.type === 'checkbox') { if(value==='true'||value==='false') el.checked=value==='true'; }
       else if (el.type === 'text' || el.tagName === 'TEXTAREA') { el.value=value; }
       else if (Number.isFinite(Number(value)) && Number(value)>=Number(el.min) && Number(value)<=Number(el.max)) el.value=value;
@@ -155,31 +162,37 @@ function render(target,W,H) {
   target.drawImage(photo,crop.x,crop.y,crop.width,crop.height,p.x,p.y,p.w,p.h);
   drawWatermark(target,W,H);
 }
-// Single text watermark, optional, defaulting to the lower-right corner.
-const WATERMARK_INSET = .028, WATERMARK_GAP = .006;
+// Text is composited last so it spans the seam in either layout.
 function watermarkLayout(W,H) {
   const text=$('watermark-text').value.trim();
   if(!$('watermark-on').checked || !text) return null;
-  const size=Math.round(W*Number($('watermark-size').value)/1000);
-  return {text,size,alpha:Number($('watermark-opacity').value)/100,position:$('watermark-position').value};
+  return {text,size:W*Number($('watermark-size').value)/1000,
+    alpha:Number($('watermark-opacity').value)/100,position:$('watermark-position').value};
 }
 function drawWatermark(target,W,H) {
   const mark=watermarkLayout(W,H);
   if(!mark) return;
-  const inset=Math.round(Math.min(W,H)*WATERMARK_INSET), line=mark.size*1.12;
+  const inset=Math.min(W,H)*.028;
   target.save();
-  target.font=`500 ${mark.size}px Inter,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif`;
-  const width=Math.min(target.measureText(mark.text).width, W-2*inset);
-  let x=inset, y=0;
+  target.font=`600 ${mark.size}px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif`;
+  const metrics=target.measureText(mark.text);
+  const width=Math.min(metrics.width,W-2*inset);
+  let x=inset;
   if(mark.position.includes('right')) x=W-inset-width;
   else if(!mark.position.includes('left')) x=(W-width)/2;
-  if(mark.position.startsWith('top')) y=inset+mark.size;
-  else if(mark.position.startsWith('bottom')) y=H-inset;
-  else y=(H-line)/2+mark.size*.78;
+  const ascent=metrics.actualBoundingBoxAscent ?? mark.size*.8;
+  const descent=metrics.actualBoundingBoxDescent ?? mark.size*.2;
+  let y=H/2+(ascent-descent)/2;
+  if(mark.position.startsWith('top')) y=inset+ascent;
+  else if(mark.position.startsWith('bottom')) y=H-inset-descent;
+  if(mark.position==='seam') {
+    const p=panels(W,H), cx=p.x>0?p.x:W/2, cy=p.y>0?p.y:H/2;
+    x=cx-width/2;y=cy+(ascent-descent)/2;
+  }
   target.globalAlpha=mark.alpha;
-  target.shadowColor='rgba(0,0,0,.55)'; target.shadowBlur=mark.size*.28; target.shadowOffsetY=mark.size*.07;
-  target.fillStyle='#f6f4ec';
-  target.fillText(mark.text,x,y,Math.min(W-2*inset,W));
+  target.shadowColor='rgba(0,0,0,.45)';target.shadowBlur=mark.size*.14;target.shadowOffsetY=mark.size*.04;
+  target.fillStyle=$('text-color').value;
+  target.fillText(mark.text,x,y,W-2*inset);
   target.restore();
 }
 function setPreviewSize() {
@@ -222,7 +235,6 @@ $('horizontal').addEventListener('input',e => {focusX = Number(e.target.value)/1
 $('vertical').addEventListener('input',e => {focusY = Number(e.target.value)/100;sync();});
 $('reset').addEventListener('click',reset);
 settingIds.forEach(id => $(id).addEventListener('input',()=>{setPreviewSize();sync();saveSettings();}));
-$('watermark-text').addEventListener('input',e=>{toggleWatermarkDefaults();setPreviewSize();sync();saveSettings();});
 function toggleWatermarkDefaults() {$('watermark-defaults').hidden=!$('watermark-on').checked;}
 $('sample').addEventListener('click', async () => {
   const version = ++loadVersion;
