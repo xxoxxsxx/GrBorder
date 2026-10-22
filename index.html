@@ -3,11 +3,15 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Frame Lab · 相机拼图</title>
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta name="theme-color" content="#12364d">
 <link rel="stylesheet" href="style.css">
-<script src="assets/images.js" defer></script><script src="app.js" defer></script>
+<script src="assets/moon-images.js" defer></script><script src="app.js" defer></script>
 </head>
 <body>
-<header><a class="brand" href="./index.html"><span class="brand-icon">▣</span> FRAME LAB <small>相机拼图工作室</small></a><span class="privacy"><i></i> 照片仅在本机处理</span></header>
+<header><a class="brand" href="./index.html"><img src="assets/logo.svg" width="34" height="34" alt="" class="brand-icon"> FRAME LAB <small>相机拼图工作室</small></a><span class="privacy"><i></i> 照片仅在本机处理</span></header>
 <main>
 <section class="editor">
 <div class="eyebrow">A LITTLE FRAME, A LITTLE STORY</div>
@@ -16,7 +20,7 @@
 <div class="panel">
 <div class="section-title"><span>01</span><h2>选择你的照片</h2><button id="sample" class="text-button">试用示例</button></div>
 <label class="upload" id="dropzone"><input id="file" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif"><span class="upload-icon">＋</span><strong>点击上传，或拖入照片</strong><span>支持 JPG、PNG、WebP 等浏览器可读格式</span></label>
-<p id="filename" class="filename">南瓜与午后阳光 · 示例照片</p>
+<p id="filename" class="filename">月牙与夜航 · 示例照片</p>
 <div class="section-title"><span>02</span><h2>调整照片构图</h2><button id="reset" class="text-button">重置</button></div>
 <p class="hint">拖动下方照片调整构图；不同比例下，屏幕与下方照片保持相同的取景中心与缩放。</p>
 <label class="slider-label" for="zoom">照片缩放 <output id="zoom-value">100%</output></label><input id="zoom" type="range" min="1" max="3" step="0.01" value="1">

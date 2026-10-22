@@ -137,7 +137,7 @@ $('sample').addEventListener('click', async () => {
   const version = ++loadVersion;
   const image = await loadImage(window.TEMPLATE_ASSETS.sample);
   if (version !== loadVersion) return;
-  photo = image; $('filename').textContent = '南瓜与午后阳光 · 示例照片'; reset();
+  photo = image; $('filename').textContent = '月牙与夜航 · 示例照片'; reset();
 });
 canvas.addEventListener('pointerdown',e => {
   if (!photo) return;
